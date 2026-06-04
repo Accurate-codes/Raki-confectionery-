@@ -1,0 +1,191 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // Global Safety Net (Fallback Deny All)
+    // ============================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ============================================
+    // Reusable Security Helpers & Primitives
+    // ============================================
+
+    // Check if the request is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Check if user is the verified store owner (ogidanrighteous13@gmail.com)
+    function isAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email == "ogidanrighteous13@gmail.com" &&
+        request.auth.token.email_verified == true;
+    }
+
+    // Check if user is details owner
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ID validation to guard against resource poisoning
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Extract incoming request resource data
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Extract existing database resource data
+    function existing() {
+      return resource.data;
+    }
+
+    // ============================================
+    // Collection Matching & Validation Blueprints
+    // ============================================
+
+    // 1. Menu Items Collection (Publicly visible, Admin only write)
+    match /menu/{menuId} {
+      allow read: if true; // Public catalog access
+      allow write: if isAdmin(); // Custom additions only by business owner
+    }
+
+    // 2. Orders Collection
+    match /orders/{orderId} {
+      // Validate schema on write operations
+      function isValidOrder(data) {
+        return data.keys().hasAll([
+          'id', 'userId', 'customerName', 'customerPhone', 'customerEmail',
+          'items', 'totalAmount', 'deliveryType', 'deliveryDate', 'status',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().size() == 12 &&
+        isValidId(data.id) &&
+        data.userId is string &&
+        data.customerName is string && data.customerName.size() <= 256 &&
+        data.customerPhone is string && data.customerPhone.size() <= 64 &&
+        data.customerEmail is string && data.customerEmail.size() <= 256 &&
+        data.items is list && data.items.size() > 0 && data.items.size() <= 30 &&
+        data.totalAmount is number && data.totalAmount >= 0 &&
+        data.deliveryType is string && (data.deliveryType == 'pickup' || data.deliveryType == 'delivery') &&
+        data.deliveryDate is string && data.deliveryDate.size() <= 64 &&
+        data.status is string && (data.status == 'pending' || data.status == 'confirmed' || data.status == 'completed' || data.status == 'cancelled') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+      }
+
+      // Read access: Customers can read their own orders; admins can read all orders
+      allow get: if isValidId(orderId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+      
+      // List rules: Force client queries to filter properly
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      // Create rule: Enforce owner binding, pending status, strict timestamps
+      allow create: if isSignedIn() &&
+        isValidId(orderId) &&
+        isValidOrder(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      // Update rules:
+      // - Admins can perform any updates that remain schema-conforming
+      // - Customers can ONLY cancel their own order if it's currently pending
+      allow update: if isValidId(orderId) && (
+        (isAdmin() && isValidOrder(incoming()) && incoming().updatedAt == request.time) ||
+        (
+          isSignedIn() &&
+          existing().userId == request.auth.uid &&
+          existing().status == 'pending' &&
+          isValidOrder(incoming()) &&
+          incoming().userId == request.auth.uid &&
+          incoming().status == 'cancelled' &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        )
+      );
+
+      // Delete rule: Only administrators can delete records (no customer can erase traces)
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+
+    // 3. User Reviews Collection
+    match /reviews/{reviewId} {
+      function isValidReview(data) {
+        return data.keys().hasAll([
+          'id', 'userId', 'userName', 'rating', 'comment', 'approved', 'createdAt'
+        ]) &&
+        data.keys().size() == 7 &&
+        isValidId(data.id) &&
+        data.userId is string &&
+        data.userName is string && data.userName.size() <= 256 &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        data.comment is string && data.comment.size() <= 2000 &&
+        data.approved is bool &&
+        data.createdAt is timestamp;
+      }
+
+      // Read rule: Public can read approved reviews, admin can view any review
+      allow get: if isValidId(reviewId) && (isAdmin() || existing().approved == true);
+      allow list: if isAdmin() || existing().approved == true;
+
+      // Create rule: Standard user can create their feedback, which starts as unapproved
+      allow create: if isSignedIn() &&
+        isValidId(reviewId) &&
+        isValidReview(incoming()) &&
+        incoming().userId == request.auth.uid &&
+        incoming().approved == false &&
+        incoming().createdAt == request.time;
+
+      // Update rule: Only admins can edit or approve reviews
+      allow update: if isAdmin() &&
+        isValidId(reviewId) &&
+        isValidReview(incoming());
+
+      // Delete rule: Only author or admin can delete feedback
+      allow delete: if isValidId(reviewId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+    }
+
+    // 4. Inbound Customer Messaging / Customized Quotes
+    match /messages/{messageId} {
+      function isValidMessage(data) {
+        return data.keys().hasAll([
+          'id', 'name', 'email', 'phone', 'content', 'read', 'createdAt'
+        ]) &&
+        data.keys().size() == 7 &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() <= 256 &&
+        data.email is string && data.email.size() <= 256 &&
+        data.phone is string && data.phone.size() <= 64 &&
+        data.content is string && data.content.size() <= 6000 &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+      }
+
+      // Read rules: Contact inquiries and custom designs are highly private. Admin only.
+      allow get: if isAdmin() && isValidId(messageId);
+      allow list: if isAdmin();
+
+      // Create rule: Public submission of contact inquiries
+      allow create: if isValidId(messageId) &&
+        isValidMessage(incoming()) &&
+        incoming().read == false &&
+        incoming().createdAt == request.time;
+
+      // Update rule: Only admin can mark messages as read
+      allow update: if isAdmin() &&
+        isValidId(messageId) &&
+        isValidMessage(incoming());
+
+      // Delete rule: Administrative only
+      allow delete: if isAdmin() && isValidId(messageId);
+    }
+  }
+}

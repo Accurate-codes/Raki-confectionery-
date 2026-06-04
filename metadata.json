@@ -1,0 +1,6 @@
+{
+  "name": "Rakis Confectionery",
+  "description": "A premium web portal for Rakis Confectionery featuring an online confectionery catalog, interactive custom cake planner, gorgeous visual gallery, and an integrated real-time ordering system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Represents an item in the Rakis Confectionery catalog.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the menu item." },
+        "title": { "type": "string", "description": "Name of the confectionery item." },
+        "description": { "type": "string", "description": "Mouthwatering description of the item." },
+        "category": { "type": "string", "description": "Category: cakes, cupcakes, pastries, desserts." },
+        "basePrice": { "type": "number", "description": "Base price in Nigerian Naira (NGN)." },
+        "image": { "type": "string", "description": "URL of the item image." },
+        "popular": { "type": "boolean", "description": "Whether this is a popular/best-seller item." },
+        "availableSizes": { "type": "array", "description": "List of available sizes (e.g. 6 inch, 8 inch, Half Sheet)." },
+        "availableFlavors": { "type": "array", "description": "List of available flavors." }
+      },
+      "required": ["id", "title", "description", "category", "basePrice", "image"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Represents an order placed by a customer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique order identifier." },
+        "userId": { "type": "string", "description": "Firebase UID of authenticated user or 'anonymous'." },
+        "customerName": { "type": "string", "description": "Full name of the customer." },
+        "customerPhone": { "type": "string", "description": "Nigerian phone number starting with 070, 080, 090, etc." },
+        "customerEmail": { "type": "string", "description": "Email address of the customer." },
+        "items": { "type": "array", "description": "Serialized list of ordered item objects." },
+        "totalAmount": { "type": "number", "description": "Total price of the order in NGN." },
+        "deliveryType": { "type": "string", "description": "Either pickup or delivery." },
+        "deliveryAddress": { "type": "string", "description": "Full delivery address if type is delivery." },
+        "deliveryDate": { "type": "string", "description": "Format YYYY-MM-DD for delivery/pickup." },
+        "orderNotes": { "type": "string", "description": "Customer custom notes, custom theme details, etc." },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"], "description": "Self-explanatory progress states." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Order placement timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Most recent update timestamp." }
+      },
+      "required": ["id", "userId", "customerName", "customerPhone", "customerEmail", "items", "totalAmount", "deliveryType", "deliveryDate", "status", "createdAt", "updatedAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Represents a customer-submitted product review or feedback.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique review identifier." },
+        "userId": { "type": "string", "description": "UID of reviewer." },
+        "userName": { "type": "string", "description": "Name of the reviewer." },
+        "rating": { "type": "number", "description": "Rating score out of 5." },
+        "comment": { "type": "string", "description": "Review details or words." },
+        "approved": { "type": "boolean", "description": "Approval indicator to protect feed against spam." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
+      },
+      "required": ["id", "userId", "userName", "rating", "comment", "approved", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Represents customized cake quote requests or inquiry messages.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique msg ID." },
+        "name": { "type": "string", "description": "Person making inquiry." },
+        "email": { "type": "string", "description": "Email address." },
+        "phone": { "type": "string", "description": "Phone number." },
+        "content": { "type": "string", "description": "Message content." },
+        "read": { "type": "boolean", "description": "Marked read status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Review creation timestamp." }
+      },
+      "required": ["id", "name", "email", "phone", "content", "read", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/menu": {
+      "schema": "MenuItem",
+      "description": "A collection containing general confectionery and cake products for the store."
+    },
+    "/orders": {
+      "schema": "Order",
+      "description": "Orders submitted by clients."
+    },
+    "/reviews": {
+      "schema": "Review",
+      "description": "Approveable client review list."
+    },
+    "/messages": {
+      "schema": "Message",
+      "description": "Inbound private messages and customized design quotes submitted by customers."
+    }
+  }
+}
